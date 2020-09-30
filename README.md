@@ -12,12 +12,12 @@ A simple way to implement pagination in Golang.
 package main
 
 import (
-	"fmt"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/vcraescu/go-paginator"
-	"github.com/vcraescu/go-paginator/adapter"
-	"time"
+    "fmt"
+    "github.com/vcraescu/go-paginator"
+    "github.com/vcraescu/go-paginator/adapter"
+    "gorm.io/driver/sqlite"
+    "gorm.io/gorm"
+    "time"
 )
 
 type Post struct {
@@ -28,7 +28,7 @@ type Post struct {
 }
 
 func main() {
-	db, err := gorm.Open("sqlite3", "my_db.db")
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		panic(fmt.Errorf("db connection error: %s", err))
 	}
@@ -71,7 +71,7 @@ This way you can create your own adapter for any kind of data source you want to
 
 ```golang 
 type Adapter interface {
-	Nums() int
+	Nums() (int64, error)
 	Slice(offset, length int, data interface{}) error
 }
 ```
@@ -106,7 +106,7 @@ Use it if you want to render a paginator similar to the one from Google search.
 
 ```go
 func main() {
-	db, err := gorm.Open("sqlite3", "my_db.db")
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		panic(fmt.Errorf("db connection error: %s", err))
 	}

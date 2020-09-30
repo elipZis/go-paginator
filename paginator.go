@@ -16,7 +16,7 @@ var ErrNoNextPage = errors.New("no next page")
 
 // Adapter any adapter must implement this interface
 type Adapter interface {
-	Nums() int
+	Nums() (int64, error)
 	Slice(offset, length int, data interface{}) error
 }
 
@@ -25,7 +25,7 @@ type Paginator struct {
 	adapter    Adapter
 	maxPerPage int
 	page       int
-	nums       int
+	nums       int64
 }
 
 // New paginator constructor
@@ -52,19 +52,27 @@ func (p *Paginator) SetPage(page int) {
 }
 
 // Page returns current page
-func (p Paginator) Page() int {
-	pn := p.PageNums()
-	if p.page > pn {
-		return pn
+func (p Paginator) Page() (int, error) {
+	pn, err := p.PageNums()
+	if err != nil {
+		return 0, err
 	}
 
-	return p.page
+	if p.page > pn {
+		return pn, nil
+	}
+
+	return p.page, nil
 }
 
 // Results stores the current page results into data argument which must be a pointer to a slice.
 func (p Paginator) Results(data interface{}) error {
 	var offset int
-	page := p.Page()
+	page, err := p.Page()
+	if err != nil {
+		return err
+	}
+
 	if page > 1 {
 		offset = (page - 1) * p.maxPerPage
 	}
@@ -73,53 +81,102 @@ func (p Paginator) Results(data interface{}) error {
 }
 
 // Nums returns the total number of records
-func (p *Paginator) Nums() int {
+func (p *Paginator) Nums() (int64, error) {
+	var err error
 	if p.nums == -1 {
-		p.nums = p.adapter.Nums()
+		p.nums, err = p.adapter.Nums()
+		if err != nil {
+			return 0, err
+		}
 	}
 
-	return p.nums
+	return p.nums, nil
 }
 
 // HasPages returns true if there is more than one page
-func (p Paginator) HasPages() bool {
-	return p.Nums() > p.maxPerPage
+func (p Paginator) HasPages() (bool, error) {
+	n, err := p.Nums()
+	if err != nil {
+		return false, err
+	}
+
+	return n > int64(p.maxPerPage), nil
 }
 
 // HasNext returns true if current page is not the last page
-func (p Paginator) HasNext() bool {
-	return p.Page() < p.PageNums()
+func (p Paginator) HasNext() (bool, error) {
+	pn, err := p.PageNums()
+	if err != nil {
+		return false, err
+	}
+
+	page, err := p.Page()
+	if err != nil {
+		return false, err
+	}
+
+	return page < pn, nil
 }
 
 // PrevPage returns previous page number or ErrNoPrevPage if current page is first page
 func (p Paginator) PrevPage() (int, error) {
-	if !p.HasPrev() {
+	hp, err := p.HasPrev()
+	if err != nil {
+		return 0, nil
+	}
+
+	if !hp {
 		return 0, ErrNoPrevPage
 	}
 
-	return p.Page() - 1, nil
+	page, err := p.Page()
+	if err != nil {
+		return 0, err
+	}
+
+	return page - 1, nil
 }
 
 // NextPage returns next page number or ErrNoNextPage if current page is last page
 func (p Paginator) NextPage() (int, error) {
-	if !p.HasNext() {
+	hn, err := p.HasNext()
+	if err != nil {
+		return 0, err
+	}
+
+	if !hn {
 		return 0, ErrNoNextPage
 	}
 
-	return p.Page() + 1, nil
+	page, err := p.Page()
+	if err != nil {
+		return 0, err
+	}
+
+	return page, nil
 }
 
 // HasPrev returns true if current page is not the first page
-func (p Paginator) HasPrev() bool {
-	return p.Page() > 1
+func (p Paginator) HasPrev() (bool, error) {
+	page, err := p.Page()
+	if err != nil {
+		return false, err
+	}
+
+	return page > 1, nil
 }
 
 // PageNums returns the total number of pages
-func (p Paginator) PageNums() int {
-	n := int(math.Ceil(float64(p.Nums()) / float64(p.maxPerPage)))
+func (p Paginator) PageNums() (int, error) {
+	n, err := p.Nums()
+	if err != nil {
+		return 0, err
+	}
+
+	n = int64(math.Ceil(float64(n) / float64(p.maxPerPage)))
 	if n == 0 {
 		n = 1
 	}
 
-	return n
+	return int(n), nil
 }

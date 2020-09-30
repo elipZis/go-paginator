@@ -2,31 +2,28 @@ package adapter_test
 
 import (
 	"fmt"
-	"github.com/jinzhu/gorm"
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/vcraescu/go-paginator"
 	"github.com/vcraescu/go-paginator/adapter"
-	"math/rand"
-	"os"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 	"testing"
 )
 
-var dbName = fmt.Sprintf("test_%d.db", rand.Int())
+type (
+	Post struct {
+		ID     uint `gorm:"primary_key"`
+		Number int
+	}
 
-type Post struct {
-	ID     uint `gorm:"primary_key"`
-	Number int
-}
-
-type GORMAdapterTestSuite struct {
-	suite.Suite
-	db *gorm.DB
-}
+	GORMAdapterTestSuite struct {
+		suite.Suite
+		db *gorm.DB
+	}
+)
 
 func (suite *GORMAdapterTestSuite) SetupTest() {
-	db, err := gorm.Open("sqlite3", dbName)
+	db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{})
 	if err != nil {
 		panic(fmt.Errorf("setup test: %s", err))
 	}
@@ -44,11 +41,8 @@ func (suite *GORMAdapterTestSuite) SetupTest() {
 }
 
 func (suite *GORMAdapterTestSuite) TearDownTest() {
-	if err := suite.db.Close(); err != nil {
-		panic(fmt.Errorf("tear down test: %s", err))
-	}
-
-	if err := os.Remove(dbName); err != nil {
+	rawDB, _ := suite.db.DB()
+	if err := rawDB.Close(); err != nil {
 		panic(fmt.Errorf("tear down test: %s", err))
 	}
 }
@@ -57,11 +51,20 @@ func (suite *GORMAdapterTestSuite) TestFirstPage() {
 	q := suite.db.Model(Post{})
 	p := paginator.New(adapter.NewGORMAdapter(q), 10)
 
-	assert.Equal(suite.T(), 10, p.PageNums())
-	assert.Equal(suite.T(), 1, p.Page())
-	assert.True(suite.T(), p.HasNext())
-	assert.False(suite.T(), p.HasPrev())
-	assert.True(suite.T(), p.HasPages())
+	pn, _ := p.PageNums()
+	suite.Equal(10, pn)
+
+	page, _ := p.Page()
+	suite.Equal(1, page)
+
+	hn, _ := p.HasNext()
+	suite.True(hn)
+
+	hp, _ := p.HasPrev()
+	suite.False(hp)
+
+	hpages, _ := p.HasPages()
+	suite.True(hpages)
 }
 
 func (suite *GORMAdapterTestSuite) TestLastPage() {
@@ -69,8 +72,12 @@ func (suite *GORMAdapterTestSuite) TestLastPage() {
 	p := paginator.New(adapter.NewGORMAdapter(q), 10)
 
 	p.SetPage(10)
-	assert.False(suite.T(), p.HasNext())
-	assert.True(suite.T(), p.HasPrev())
+
+	hn, _ := p.HasNext()
+	suite.False(hn)
+
+	hp, _ := p.HasPrev()
+	suite.True(hp)
 }
 
 func (suite *GORMAdapterTestSuite) TestOutOfRangeCurrentPage() {
@@ -80,18 +87,26 @@ func (suite *GORMAdapterTestSuite) TestOutOfRangeCurrentPage() {
 	var posts []Post
 	p.SetPage(11)
 	err := p.Results(&posts)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), 10, p.Page())
+	suite.NoError(err)
+
+	page, _ := p.Page()
+	suite.Equal(10, page)
 
 	posts = make([]Post, 0)
 	p.SetPage(-4)
-	assert.True(suite.T(), p.HasNext())
-	assert.False(suite.T(), p.HasPrev())
-	assert.True(suite.T(), p.HasPages())
+
+	hn, _ := p.HasNext()
+	suite.True(hn)
+
+	hp, _ := p.HasPrev()
+	suite.False(hp)
+
+	hpages, _ := p.HasPages()
+	suite.True(hpages)
 
 	err = p.Results(&posts)
-	assert.NoError(suite.T(), err)
-	assert.Len(suite.T(), posts, 10)
+	suite.NoError(err)
+	suite.Len(posts, 10)
 }
 
 func (suite *GORMAdapterTestSuite) TestCurrentPageResults() {
@@ -101,11 +116,16 @@ func (suite *GORMAdapterTestSuite) TestCurrentPageResults() {
 	var posts []Post
 	p.SetPage(6)
 	err := p.Results(&posts)
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 
-	assert.Len(suite.T(), posts, 10)
+	suite.Len(posts, 10)
 	for i, post := range posts {
-		assert.Equal(suite.T(), (p.Page()-1)*10+i+1, post.Number)
+		page, err := p.Page()
+		if !suite.NoError(err) {
+			return
+		}
+		fmt.Println(p.Nums())
+		suite.Equal((page-1)*10+i+1, post.Number)
 	}
 }
 

@@ -1,8 +1,6 @@
 package adapter_test
 
 import (
-	_ "github.com/jinzhu/gorm/dialects/sqlite"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/vcraescu/go-paginator"
 	"github.com/vcraescu/go-paginator/adapter"
@@ -21,26 +19,35 @@ func (suite *ArrayAdapterTestSuite) SetupTest() {
 	}
 }
 
-func (suite *ArrayAdapterTestSuite) TearDownTest() {
-	suite.data = make([]int, 0)
-}
-
 func (suite *ArrayAdapterTestSuite) TestFirstPage() {
 	p := paginator.New(adapter.NewSliceAdapter(suite.data), 10)
 
-	assert.Equal(suite.T(), 10, p.PageNums())
-	assert.Equal(suite.T(), 1, p.Page())
-	assert.True(suite.T(), p.HasNext())
-	assert.False(suite.T(), p.HasPrev())
-	assert.True(suite.T(), p.HasPages())
+	pn, _ := p.PageNums()
+	suite.Equal(10, pn)
+
+	page, _ := p.Page()
+	suite.Equal(1, page)
+
+	hn, _ := p.HasNext()
+	suite.True(hn)
+
+	hp, _ := p.HasPrev()
+	suite.False(hp)
+
+	hpages, _ := p.HasPages()
+	suite.True(hpages)
 }
 
 func (suite *ArrayAdapterTestSuite) TestLastPage() {
 	p := paginator.New(adapter.NewSliceAdapter(suite.data), 10)
 
 	p.SetPage(10)
-	assert.False(suite.T(), p.HasNext())
-	assert.True(suite.T(), p.HasPrev())
+
+	hn, _ := p.HasNext()
+	suite.False(hn)
+
+	hp, _ := p.HasPrev()
+	suite.True(hp)
 }
 
 func (suite *ArrayAdapterTestSuite) TestOutOfRangeCurrentPage() {
@@ -49,18 +56,26 @@ func (suite *ArrayAdapterTestSuite) TestOutOfRangeCurrentPage() {
 	var pages []int
 	p.SetPage(11)
 	err := p.Results(&pages)
-	assert.NoError(suite.T(), err)
-	assert.Equal(suite.T(), 10, p.Page())
+	suite.NoError(err)
+
+	page, _ := p.Page()
+	suite.Equal(10, page)
 
 	pages = make([]int, 0)
 	p.SetPage(-4)
-	assert.True(suite.T(), p.HasNext())
-	assert.False(suite.T(), p.HasPrev())
-	assert.True(suite.T(), p.HasPages())
+
+	hn, _ := p.HasNext()
+	suite.True(hn)
+
+	hp, _ := p.HasPrev()
+	suite.False(hp)
+
+	hpages, _ := p.HasPages()
+	suite.True(hpages)
 
 	err = p.Results(&pages)
-	assert.NoError(suite.T(), err)
-	assert.Len(suite.T(), pages, 10)
+	suite.NoError(err)
+	suite.Len(pages, 10)
 }
 
 func (suite *ArrayAdapterTestSuite) TestCurrentPageResults() {
@@ -69,11 +84,12 @@ func (suite *ArrayAdapterTestSuite) TestCurrentPageResults() {
 	var pages []int
 	p.SetPage(6)
 	err := p.Results(&pages)
-	assert.NoError(suite.T(), err)
+	suite.NoError(err)
 
-	assert.Len(suite.T(), pages, 10)
+	suite.Len(pages, 10)
 	for i, page := range pages {
-		assert.Equal(suite.T(), (p.Page()-1)*10+i+1, page)
+		expectedPage, _ := p.Page()
+		suite.Equal((expectedPage-1)*10+i+1, page)
 	}
 }
 
